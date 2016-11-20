@@ -1,0 +1,26 @@
+{
+	"folders":
+	[
+		{
+			"path": ".",
+            "folder_exclude_patterns": [".stack-work"],
+            "file_exclude_patterns": ["*.aux","*.log","*.pdf"]
+		}
+	],
+    "build_systems":
+    [
+        {
+          "name": "build",
+          "cmd": ["stack", "build", "--ghc-options", "-W"],
+          "file_regex": "^ {0,4}([^\\s=:\\(\\)][^\\n:\\(\\)]+?hs):([0-9]*):?([0-9]*)",
+          "selector": "source.haskell"
+        },
+        {
+          "name": "run",
+          "cmd": ["stack", "build", "--ghc-options", "-W -Werror", "--exec", "nfm2017-exe"],
+          "file_regex": "^ {0,4}([^\\s=:\\(\\)][^\\n:\\(\\)]+?hs):([0-9]*):?([0-9]*)",
+          "selector": "source.haskell",
+          "working_dir": "${project_path}"
+        }
+    ]
+}
