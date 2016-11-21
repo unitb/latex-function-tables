@@ -208,5 +208,5 @@ deploy:
   password:
     secure: Y+BHJ0cJpe2CwSQV/+ZFlNppHSEQ7Ivi97esWqgh1Xjel3/JnsFLKHOXxo3c9frazjs8C7rBFXRsmWqJDDNG4YtcMdqsiDek2NIhLVV59ZvBJxvjGUsgEWCO/S0Ga96IwGGT8yfsNVP0l5CHIWODDf+kyVONFVSRzMNSyMY2w7LLFahh9C/gclByPAKffLlJFwOdel7ikyASOxg3yejTptGnv5o34b7xBXwibPI5eurXhZ0FRphQZhtkz5SL1OcVSiQYZEAuX9XpV+vU1G+zZfPPxloWpCdlv1fuPdFMOnzuLq2R26jy5L9qUdQgjx2xxhnHEeMOCRzh4gvMIIICIsNf6yej9J3Xp+Ug7llRDhgAi255q8iSEM50HkM8TpzqVgQMznbbxFE/1mUSaFXQ/PhO07a64PWBeXMVuno8sWHb5F3OJW9SrsgQvDIs0WojKWUFHR7VO2JA4RBh8iEjMgeBYdOZHTAmoiWapthbakOv4//cQcLRrHl7xvfSNYU2ElB2kn/jZrNBUCuvVw6T9U+I4b4Gs0Uag/uoWcc4W3ckIekCeSqU/UEr7CvB0LZ9frWxtoYB2UtpYXD7ovRCkDi0q8ZSziUiM1ehq7n71aMJChpvRRUXPl7lqoZ55GcmbIl3+dDkkc9+95M4AV6wMKE/VBAoKTpigBNpJP2iKac=
   on:
-    repo: unitb/latex-function-tables
-    condition: (BUILD == stack) && (ARGS == "--resolver lts-6") && ($TRAVIS_OS_NAME == osx) 
+    # repo: unitb/latex-function-tables
+    # condition: (BUILD == stack) && (ARGS == "--resolver lts-6") && ($TRAVIS_OS_NAME == osx) 

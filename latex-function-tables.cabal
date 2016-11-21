@@ -2,7 +2,7 @@ name:                latex-function-tables
 version:             0.1.0.0
 synopsis:            Function table specifications in latex
 description:         Please see README.md
-homepage:            https://github.com/githubuser/nfm2017#readme
+homepage:            https://github.com/unitb/latex-function-tables
 license:             BSD3
 license-file:        LICENSE
 author:              Simon Hudon
@@ -10,7 +10,7 @@ maintainer:          simon.hudon@gmail.com
 copyright:           2016 Simon Hudon
 category:            Text
 build-type:          Simple
--- extra-source-files:
+extra-source-files:  README.md
 cabal-version:       >=1.10
 
 library
