@@ -7,9 +7,15 @@
         ,GeneralizedNewtypeDeriving #-}
 module Text.LaTeX.FunctionTable 
     ( makeTable 
-    , FunctionTable (..)
-    , TableCells (..)
-    , branch, cell )
+    , LaTeXLI (..)
+    , FunctionTable 
+    , FunctionTable' (..)
+    , TableCells
+    , TableCells' (..)
+    , branch, cell 
+    , subtables
+    , isubtables
+    )
 where
 
 import Text.LaTeX.Internal.FunctionTable

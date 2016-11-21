@@ -1,7 +1,10 @@
 {-# LANGUAGE OverloadedStrings,QuasiQuotes
+        ,ImplicitParams
         ,TemplateHaskell
+        ,ConstraintKinds
         ,FlexibleContexts
         ,FlexibleInstances
+        ,StandaloneDeriving
         ,UndecidableInstances
         ,MultiParamTypeClasses
         ,FunctionalDependencies
@@ -9,23 +12,33 @@
 module Text.LaTeX.Internal.FunctionTable where
 
 
+import Control.Applicative
 import Control.Lens hiding ((&))
 import Control.Monad.Writer
 
+import Data.Bifoldable
+import Data.Bitraversable
 import Data.List as L
 import Data.List.NonEmpty as N hiding (repeat)
 import Data.Maybe
 import Data.Semigroup hiding ((<>))
+import GHC.Stack
 import Text.LaTeX
 import Text.LaTeX.Packages.AMSMath
 import Text.LaTeX.Base.Syntax
 import Text.LaTeX.Base.Class
 
-data TableCells a = Cell a | Condition Cols (NonEmpty (LaTeX,TableCells a))
+data LaTeXLI = LaTeXLI SrcLoc String 
+    deriving (Show,Eq)
+
+data TableCells' a b = Cell b | Condition Cols (NonEmpty (a,TableCells' a b))
+    deriving (Show,Eq,Functor,Foldable,Traversable)
+
+data FunctionTable' a b = Table b (TableCells' a b)
     deriving (Show,Eq,Functor,Traversable,Foldable)
 
-data FunctionTable a = Table a (TableCells a)
-    deriving (Show,Eq,Functor,Traversable,Foldable)
+type TableCells a = TableCells' a a
+type FunctionTable a = FunctionTable' a a
 
 newtype Rows = Rows Int
     deriving (Show,Eq,Ord,Num)
@@ -49,32 +62,63 @@ data Heading = Heading
         }
     deriving (Show,Eq)
 
-makePrisms ''TableCells
+makePrisms ''TableCells'
 makeFields ''Heading
 makeFields ''Filler
 
-type M a = WriterT [(LaTeX,TableCells a)] Maybe
+instance Bifunctor FunctionTable' where
+    bimap = bimapDefault
+instance Bifunctor TableCells' where
+    bimap = bimapDefault
+instance Bifoldable FunctionTable' where
+    bifoldMap = bifoldMapDefault
+instance Bifoldable TableCells' where
+    bifoldMap = bifoldMapDefault
+instance Bitraversable FunctionTable' where
+    bitraverse f g (Table h t) = liftA2 Table (g h) (bitraverse f g t)
+instance Bitraversable TableCells' where
+    bitraverse _ g (Cell x) = Cell <$> g x
+    bitraverse f g (Condition w ts) = Condition w <$> traverse (bitraverse f $ bitraverse f g) ts
 
-makeTable :: a -> M a () -> FunctionTable a
-makeTable x t = Table x $ Condition (Cols 1) $ fromJust $ nonEmpty =<< execWriterT t
+type Pre = (?loc :: CallStack)
 
-cell :: String -> String -> M LaTeX ()
-cell l x = tell [(math $ TeXRaw $ fromString l,Cell $ math $ TeXRaw $ fromString x)]
+subtables :: Traversal' (TableCells' a b) (a,TableCells' a b)
+subtables _f x@(Cell _) = pure x
+subtables f (Condition k xs) = Condition k <$> traverse f xs
 
-branch :: String -> M a () -> M a ()
+isubtables :: IndexedTraversal' Int (TableCells' a b) (a,TableCells' a b)
+isubtables _f x@(Cell _) = pure x
+isubtables f (Condition k xs) = Condition k <$> itraverse (indexed f) xs
+
+type M a = WriterT [(a,TableCells a)] Maybe
+
+makeTable :: Pre
+          => String 
+          -> M LaTeXLI () 
+          -> FunctionTable LaTeXLI
+makeTable x t = Table (LaTeXLI (snd $ L.head $ getCallStack ?loc) x) 
+            $ Condition (Cols 1) 
+            $ fromJust $ nonEmpty =<< execWriterT t
+
+cell :: Pre => String -> String -> M LaTeXLI ()
+-- cell l x = tell [(math $ TeXRaw $ fromString l,Cell $ math $ TeXRaw $ fromString x)]
+cell l x = tell [(LaTeXLI (snd $ L.head $ getCallStack ?loc) l
+                 ,Cell $ LaTeXLI (snd $ L.head $ getCallStack ?loc) x)]
+
+branch :: Pre => String -> M LaTeXLI () -> M LaTeXLI ()
 branch l t = do
     xs <- lift $ nonEmpty =<< execWriterT t
-    tell [(math $ TeXRaw $ fromString l,Condition (Cols 1) xs)]
+    tell [(LaTeXLI (snd $ L.head $ getCallStack ?loc) l,Condition (Cols 1) xs)]
 
-depth :: TableCells a -> Int
+depth :: TableCells' a b -> Int
 depth (Cell _) = 0
 depth (Condition (Cols w) xs) = w + maximum (depth.snd <$> xs)
 
-witdth :: TableCells a -> Int
+witdth :: TableCells' a b -> Int
 witdth (Cell _) = 1
 witdth (Condition _ xs) = sum (witdth.snd <$> xs)
 
-columnSpecOf :: TableCells a -> [TableSpec]
+columnSpecOf :: TableCells' a b -> [TableSpec]
 columnSpecOf t = cols
     where
         d = depth t
@@ -104,14 +148,15 @@ instance (HasWidth a c,HasWidth b c) => HasWidth (Either a b) c where
 instance HasWidth Cols Cols where
     width f x = f x
 
-texFunctionTable :: Render a => FunctionTable a -> LaTeX
+texFunctionTable :: (Render a,Render b) 
+                 => FunctionTable' a b 
+                 -> LaTeX
 texFunctionTable (Table x t) = tabular Nothing (columnSpecOf t) $ 
         hline <> 
         rowToLatex sz (Row cond x) <>
         hline <> 
         hline <> 
-        (foldMap (rowToLatex sz) . texFunctionTableRows) t <> 
-        hline
+        (foldMap (rowToLatex sz) . texFunctionTableRows) t
     where
         cond | sz <= 1   = []
              | otherwise = [Right $ Heading "" 1 1 True]
@@ -157,8 +202,8 @@ mapNonEmpty :: (a -> b)
 mapNonEmpty f g (x :| xs) = f x :| g xs
 
 texFunctionTableRows :: Render a 
-                     => TableCells a 
-                     -> NonEmpty (Row a)
+                     => TableCells' a b
+                     -> NonEmpty (Row b)
 texFunctionTableRows (Cell x) = pure $ Row [] x
 texFunctionTableRows (Condition w ts) 
         = sconcat $ uncurry heading <$> ts
@@ -168,9 +213,12 @@ texFunctionTableRows (Condition w ts)
                 (_Snoc %~ bimap (L.map $ addMargin w) (addLastMargin w)) 
                 r
             where
-                h' = Heading h (Rows n) w False
+                h' = Heading (rendertex h) (Rows n) w False
                 r = texFunctionTableRows t
                 n = N.length r
 
-instance Render a => Render (FunctionTable a) where
+instance Render LaTeXLI where
+    render (LaTeXLI _ l) = render $ math $ TeXRaw $ fromString l
+
+instance (Render a,Render b) => Render (FunctionTable' a b) where
     render = render . texFunctionTable
