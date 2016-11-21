@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings,QuasiQuotes
         ,ImplicitParams
+        ,CPP
         ,TemplateHaskell
         ,ConstraintKinds
         ,FlexibleContexts
@@ -22,7 +23,12 @@ import Data.List as L
 import Data.List.NonEmpty as N hiding (repeat)
 import Data.Maybe
 import Data.Semigroup hiding ((<>))
+#if MIN_VERSION_base(4,9,0)
 import GHC.Stack
+#else
+import GHC.Stack
+import GHC.SrcLoc
+#endif
 import Text.LaTeX
 import Text.LaTeX.Packages.AMSMath
 import Text.LaTeX.Base.Syntax
