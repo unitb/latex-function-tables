@@ -23,19 +23,31 @@ import Data.List as L
 import Data.List.NonEmpty as N hiding (repeat)
 import Data.Maybe
 import Data.Semigroup hiding ((<>))
+import Data.Text
+
 #if MIN_VERSION_base(4,9,0)
 import GHC.Stack
 #else
 import GHC.Stack
 import GHC.SrcLoc
 #endif
+import           Language.Haskell.TH.Quote 
+import qualified Language.Haskell.TH.Syntax as TH
+
 import Text.LaTeX
 import Text.LaTeX.Packages.AMSMath
 import Text.LaTeX.Base.Syntax
-import Text.LaTeX.Base.Class
+import Text.LaTeX.Base.Class  hiding (fromLaTeX)
 
 data LaTeXLI = LaTeXLI SrcLoc String 
     deriving (Show,Eq)
+
+tex :: QuasiQuoter 
+tex = QuasiQuoter
+        { quoteExp  = \str -> [e| raw $(TH.lift str) |]
+        , quotePat  = undefined
+        , quoteType = undefined 
+        , quoteDec  = undefined }
 
 data TableCells' a b = Cell b | Condition Cols (NonEmpty (a,TableCells' a b))
     deriving (Show,Eq,Functor,Foldable,Traversable)
@@ -81,7 +93,7 @@ instance Bifoldable FunctionTable' where
 instance Bifoldable TableCells' where
     bifoldMap = bifoldMapDefault
 instance Bitraversable FunctionTable' where
-    bitraverse f g (Table h t) = liftA2 Table (g h) (bitraverse f g t)
+    bitraverse f g (Table h t) = liftA2 Table (g h) (bitraverse f g t)
 instance Bitraversable TableCells' where
     bitraverse _ g (Cell x) = Cell <$> g x
     bitraverse f g (Condition w ts) = Condition w <$> traverse (bitraverse f $ bitraverse f g) ts
@@ -98,29 +110,34 @@ isubtables f (Condition k xs) = Condition k <$> itraverse (indexed f) xs
 
 type M a = WriterT [(a,TableCells a)] Maybe
 
+fromLaTeX :: Pre => LaTeX -> LaTeXLI
+fromLaTeX = LaTeXLI (snd $ L.last $ getCallStack ?loc) . unpack . render
+
+makeLaTeXLI :: Pre => String -> LaTeXLI
+makeLaTeXLI = LaTeXLI (snd $ L.last $ getCallStack ?loc)
+
 makeTable :: Pre
-          => String 
+          => LaTeX 
           -> M LaTeXLI () 
           -> FunctionTable LaTeXLI
-makeTable x t = Table (LaTeXLI (snd $ L.head $ getCallStack ?loc) x) 
+makeTable x t = Table (fromLaTeX x)
             $ Condition (Cols 1) 
             $ fromJust $ nonEmpty =<< execWriterT t
 
-cell :: Pre => String -> String -> M LaTeXLI ()
--- cell l x = tell [(math $ TeXRaw $ fromString l,Cell $ math $ TeXRaw $ fromString x)]
-cell l x = tell [(LaTeXLI (snd $ L.head $ getCallStack ?loc) l
-                 ,Cell $ LaTeXLI (snd $ L.head $ getCallStack ?loc) x)]
+cell :: Pre => LaTeX -> LaTeX -> M LaTeXLI ()
+-- cell l x = tell [(math $ TeXRaw $ fromString l,Cell $ math $ TeXRaw $ fromString x)]
+cell l x = tell [(fromLaTeX l, Cell $ fromLaTeX x)]
 
-branch :: Pre => String -> M LaTeXLI () -> M LaTeXLI ()
-branch l t = do
+branch :: Pre => LaTeX -> M LaTeXLI () -> M LaTeXLI ()
+branch l t = do 
     xs <- lift $ nonEmpty =<< execWriterT t
-    tell [(LaTeXLI (snd $ L.head $ getCallStack ?loc) l,Condition (Cols 1) xs)]
+    tell [(fromLaTeX l,Condition (Cols 1) xs)]
 
 depth :: TableCells' a b -> Int
 depth (Cell _) = 0
-depth (Condition (Cols w) xs) = w + maximum (depth.snd <$> xs)
+depth (Condition (Cols w) xs) = w + L.maximum (depth.snd <$> xs)
 
-witdth :: TableCells' a b -> Int
+witdth :: TableCells' a b -> Int
 witdth (Cell _) = 1
 witdth (Condition _ xs) = sum (witdth.snd <$> xs)
 
@@ -128,12 +145,12 @@ columnSpecOf :: TableCells' a b -> [TableSpec]
 columnSpecOf t = cols
     where
         d = depth t
-        cols = VerticalLine : L.intersperse VerticalLine (replicate d LeftColumn) 
+        cols = VerticalLine : L.intersperse VerticalLine (L.replicate d LeftColumn) 
                 ++ [VerticalLine,VerticalLine,CenterColumn,VerticalLine,VerticalLine]
 
 rowToLatex :: Render a => Cols -> Row a -> LaTeX
 rowToLatex (Cols size) (Row hs x) = 
-                           foldr (&) (rendertex x) (L.map oneHeading hs) 
+                           L.foldr (&) (rendertex x) (L.map oneHeading hs) 
                         <> lnbk <> cline (n+1) size
     where
         colSpec = [VerticalLine,LeftColumn,VerticalLine]
@@ -146,12 +163,12 @@ rowToLatex (Cols size) (Row hs x) =
                     || has (_Left.isLast.filtered id) x 
         b = L.dropWhile canCut $ L.reverse hs
         Cols n = sum $ view width <$> b
-        Cols total = sum $ view width <$> hs
+        Cols total = sum $ view width <$> hs
 
-instance (HasWidth a c,HasWidth b c) => HasWidth (Either a b) c where
+instance (HasWidth a c,HasWidth b c) => HasWidth (Either a b) c where
     width f (Left x) = Left <$> width f x
     width f (Right x) = Right <$> width f x
-instance HasWidth Cols Cols where
+instance HasWidth Cols Cols where
     width f x = f x
 
 texFunctionTable :: (Render a,Render b) 
@@ -170,12 +187,13 @@ texFunctionTable (Table x t) = tabular Nothing (columnSpecOf t) $
 
 -- \multirow{number rows}{width}{text}
 multirow :: LaTeXC l => Int -> l -> l 
-multirow n = liftL $ \l -> TeXComm "multirow"
-      [ FixArg $ rendertex n
-      , FixArg . TeXRaw $ "*"
-      , FixArg l
-      ]
-
+multirow n | n <= 1    = id
+           | otherwise = liftL $ \l -> TeXComm "multirow"
+                  [ FixArg $ rendertex n
+                  , FixArg . TeXRaw $ "*"
+                  , FixArg l
+                  ]
+ 
 rows :: Lens' Heading Rows
 rows f (Heading l r c b) = (\r' -> Heading l r' c b) <$> f r
 
@@ -186,7 +204,7 @@ condition :: Rows -> Cols -> LaTeX -> NonEmpty LaTeX
 condition (Rows n) (Cols m) t = first :| rest 
     where
         first = multicolumn m [VerticalLine,CenterColumn,VerticalLine] (multirow n t)
-        rest  = replicate (n-1) (multicolumn m [VerticalLine,LeftColumn,VerticalLine] "")
+        rest  = L.replicate (n-1) (multicolumn m [VerticalLine,LeftColumn,VerticalLine] "")
 
 makeLast :: Heading -> Heading
 makeLast (Heading a b c _) = Heading a b c True
@@ -224,7 +242,7 @@ texFunctionTableRows (Condition w ts)
                 n = N.length r
 
 instance Render LaTeXLI where
-    render (LaTeXLI _ l) = render $ math $ TeXRaw $ fromString l
+    render (LaTeXLI _ l) = render . math . TeXRaw . fromString $ l
 
 instance (Render a,Render b) => Render (FunctionTable' a b) where
     render = render . texFunctionTable

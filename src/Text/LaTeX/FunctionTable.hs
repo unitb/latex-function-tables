@@ -15,6 +15,8 @@ module Text.LaTeX.FunctionTable
     , branch, cell 
     , subtables
     , isubtables
+    , fromLaTeX
+    , tex 
     )
 where
 
