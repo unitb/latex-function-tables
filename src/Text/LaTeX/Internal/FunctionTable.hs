@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings,QuasiQuotes
         ,ImplicitParams
         ,CPP
+        ,TypeFamilies
         ,TemplateHaskell
         ,ConstraintKinds
         ,FlexibleContexts
@@ -97,6 +98,11 @@ instance Bitraversable FunctionTable' where
 instance Bitraversable TableCells' where
     bitraverse _ g (Cell x) = Cell <$> g x
     bitraverse f g (Condition w ts) = Condition w <$> traverse (bitraverse f $ bitraverse f g) ts
+instance (i ~ [k]) => FunctorWithIndex i (TableCells' k) where 
+instance (i ~ [k]) => FoldableWithIndex i (TableCells' k) where 
+instance (i ~ [k]) => TraversableWithIndex i (TableCells' k) where 
+    itraverse f (Condition w cs) = Condition w <$> traverse (uncurry $ \k -> fmap ((,) k) . itraverse (f . (k:))) cs
+    itraverse f (Cell x) = Cell <$> f [] x
 
 type Pre = (?loc :: CallStack)
 
