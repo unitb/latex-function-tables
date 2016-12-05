@@ -1,7 +1,7 @@
-{-# LANGUAGE OverloadedStrings,TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings,TemplateHaskell,QuasiQuotes #-}
 module Main where
 
-import Text.LaTeX
+import Text.LaTeX hiding (tex)
 import Text.LaTeX.FunctionTable
 import System.Process
 
@@ -38,15 +38,27 @@ myFT = makeTable           "Letter" $ do
     -- Condition (Cols 1) $ ("a", Cell "A") :| [("b", Condition (Cols 1) $ ("c",Cell "C") :| [("not c",Cell "B")])]
 
 myFT' :: FunctionTable LaTeXLI
-myFT' = makeTable               "x" $ do
-        cell "C0"               "x_0"
-        branch "\\neg C0" $ do
+myFT' = makeTable                   "x" $ do
+        cell "C0"                   [tex|x_0|]
+        branch [tex|\neg C0|] $ do
             branch "C1" $ do
-                cell "C2"       "x_2"
-                cell "\\neg C2" "x_3"
-            branch "\\neg C1" $ do
-                cell "C2"       "x_4"
-                cell "\\neg C2" "x_5"
+                branch "C2" $ do 
+                    cell "C3"       [tex|x_2|]
+                cell [tex|\neg C2|] [tex|x_3|]
+            branch [tex|\neg C1|] $ do
+                cellH 2 "C2"        [tex|x_4|]
+                cell [tex|\neg C2|] [tex|x_5|]
+
+myFT'' :: FunctionTable LaTeXLI
+myFT'' = makeTable                   "x" $ do
+        cell "C0"                   [tex|x_0|]
+        branch [tex|\neg C0|] $ do
+            branch "C1" $ do
+                cell "C2"           [tex|x_2|]
+                cell [tex|\neg C2|] [tex|x_3|]
+            branch [tex|\neg C1|] $ do
+                cellH 2 "C2"        [tex|x_4|]
+                cell [tex|\neg C2|] [tex|x_5|]
 
 main :: IO ()
 main = do

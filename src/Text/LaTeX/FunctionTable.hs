@@ -12,7 +12,7 @@ module Text.LaTeX.FunctionTable
     , FunctionTable' (..)
     , TableCells
     , TableCells' (..)
-    , branch, cell 
+    , branch, cell, cellH
     , subtables
     , isubtables
     , fromLaTeX
